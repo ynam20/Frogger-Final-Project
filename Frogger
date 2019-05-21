@@ -1,0 +1,254 @@
+import javax.swing.JPanel;
+import javax.swing.JFrame;
+import java.awt.*;
+import java.util.Random;
+import javax.imageio.ImageIO;
+import java.io.File;
+import java.awt.event.KeyListener;
+import java.awt.event.KeyEvent;
+
+public class Frogger extends JPanel implements KeyListener{
+    public static final int WIDTH = 1024;
+    public static final int HEIGHT = 768;
+    public static final int FPS = 30;
+    World world;
+    public static  DrawImage imageFinder;
+    Color background;
+
+    class Runner implements Runnable{
+	public void run(){
+	    while(true){
+		world.updateState();
+		repaint();
+		try{
+		    Thread.sleep(1000/FPS);
+		}
+		catch(InterruptedException e){}
+	    }
+	    
+	}
+	
+    }
+    
+    public void keyPressed(KeyEvent e) {
+	commands(e);
+    }
+    
+    public void addNotify() {
+	super.addNotify();
+	requestFocus();
+    }
+    public void keyReleased(KeyEvent e){}
+    public void keyTyped(KeyEvent e){}
+
+    public void commands(KeyEvent e){
+	char c=e.getKeyChar();
+	if(c=='w'||c=='a'||c=='s'||c=='d')
+	    userObject.move(c,world);
+	/*	if(c=='p')
+	    this=new Frogger(); */
+	if(c=='l'){			
+	    System.out.println("Thanks for playing!");			
+	    System.exit(0);
+	}
+    }//commands method executes specific commands depending on key pressed on keyboard
+    
+    public Frogger(){
+	world = new World(WIDTH, HEIGHT,16,16,this);
+	addKeyListener(this);
+	this.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+	Thread mainThread = new Thread(new Runner());
+	mainThread.start();
+    }
+    //makes new world object,assigns it a keylistener, makes a thread, starts the thread 
+    
+    public static void main(String[] args){
+	JFrame frame = new JFrame("Frogger+");
+	imageFinder=new DrawImage();
+	frame.add(imageFinder);
+	frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+	Frogger mainInstance = new Frogger();
+	frame.setContentPane(mainInstance);
+	frame.pack();
+	frame.setVisible(true);
+    }
+    @Override
+	public void paintComponent(Graphics g) {
+	super.paintComponent(g);
+	if(world.defeated)
+	{
+	    g.setColor(Color.black);
+	    g.fillRect(0,0,WIDTH,HEIGHT);
+	    g.setColor(Color.RED);
+	    g.drawString("You dun' messed up son, press 'l' to leave, L in tow",(WIDTH / 2) - 22,HEIGHT / 2);
+	}//draws frame when player loses
+	else{
+	    if(world.youWin){
+		g.setColor(Color.BLUE);
+		g.fillRect(0,0,WIDTH,HEIGHT);
+		g.setColor(Color.GREEN);
+		g.drawString("AAAAAYYYYYY YOU WON GANG GANG GANG",WIDTH/2,HEIGHT/2);
+	    }// draws frame when player wins
+	    else{
+		Terrain.build(g);
+		world.drawLogs(g);
+		world.drawObstacles(g);
+		userObject.draw(g);
+	    }
+	}
+    }
+} 
+
+class World{
+    static int height;
+    static int  width;
+    int numObstacles;
+    int numLogs;
+    Obstacle[] obstacles;
+    environmentalObjects[] logs;
+    userObject player;
+    Pair[] position;
+    Pair[] positionlogs;
+    userObject frog;
+    Frogger gameRunning;
+    boolean initialized;
+    boolean defeated;
+    boolean youWin;
+    public World(int initWidth, int initHeight,int numObstacle, int numLog, Frogger game){
+	initialized = false;
+	gameRunning = game;
+	numObstacles = numObstacle;
+	numLogs = numLog;
+	position = new Pair[numObstacles];
+	positionlogs = new Pair[numLogs];
+	obstacles = new Obstacle[numObstacle];
+	logs = new environmentalObjects[numLogs];
+	frog = new userObject(this);
+	width=initWidth;
+	height=initHeight;	
+
+	for (int i=0; i<numObstacle/4;i++){
+	    position[i] =new Pair(0, height*10/12);   
+	}
+	for (int i = numObstacle/4; i < numObstacle/2; i++){
+	    position[i] =new Pair(0, height*7/12);
+	}
+	for (int i = numObstacle/2; i < numObstacle*3/4; i++){
+	    position[i] =new Pair(width-32, height*4/12);	
+	}
+	for (int i = numObstacle*3/4; i<numObstacle; i++){
+	    position[i] =new Pair (width-32, height/12);
+	}
+	for (int i= 0; i<numLogs/4;i++){
+	    positionlogs[i] =new Pair (0, 0);   
+	}
+	for (int i = numLogs/4; i < numLogs/2; i++){
+	    positionlogs[i] =new Pair (0, 3*height/12);
+	}
+	for (int i = numLogs/2; i < numLogs*3/4; i++){
+	    positionlogs[i] =new Pair (width-32, 6*height/12);	
+	}
+	for (int i = numLogs*3/4; i<numLogs; i++){
+	    positionlogs[i] =new Pair (width-32, 9*height/12);
+	}
+	for(int i=0; i < numObstacle;i++){
+	    if (i < numObstacle / 2)
+		obstacles[i] = new Obstacle(position[i], 1, this);
+	    if (i >= numObstacle/2)
+		obstacles[i] = new Obstacle(position[i], 0, this);
+	}
+	
+	for(int i=0; i < numLogs; i++){
+	    if (i < numLogs / 2)
+		logs[i]=new environmentalObjects(positionlogs[i], 1, this);
+	    if (i >= numLogs/2)
+		logs[i] = new environmentalObjects(positionlogs[i], 0, this);
+
+	}
+    }// for loops to make log and car objects and assign each of them positions  
+    
+    public void initialState(){
+	userObject.position.x = width / 2;
+	userObject.position.y = height - 32;
+	for(int i=0;i<numObstacles;i++){
+	    obstacles[i].position = position[i];
+	}
+	for(int i=0;i<numLogs;i++){
+	    logs[i].position = positionlogs[i];
+	}
+	initialized=true;
+    }//method to set userObject, cars and logs to their initial states. 
+
+    
+    public int contactLog(){
+	for (int i = 0; i < numLogs; i++){ 
+	    if(userObject.position.x <= (logs[i].position.x + logs[i].size.x - (userObject.size.x)/2) &&
+	       userObject.position.x + (userObject.size.x / 2) >= logs[i].position.x  &&
+	       userObject.position.y + (userObject.size.y / 2) >= logs[i].position.y + (userObject.size.y)/2&&
+	       userObject.position.y <= (logs[i].position.y + logs[i].size.y - 25))
+		return i;
+	}
+	return -1;
+	
+    }///This method determines whether or not the frog is at least half way on a log and returns the number of the log that the frog is on, and if it isn't on one, then it returns -1 
+    public boolean hit(){
+	for (int i = 0; i < numLogs; i++){ 
+	    if(userObject.position.x <= (obstacles[i].position.x + obstacles[i].size.x-20) &&
+	       userObject.position.x + (userObject.size.x / 2) >= obstacles[i].position.x &&
+	       userObject.position.y + (userObject.size.y / 2) - 10  >= obstacles[i].position.y &&
+	       userObject.position.y <= (obstacles[i].position.y + obstacles[i].size.y-45))
+		return true;
+	}
+	return false;
+	
+    }// to check whether the frog has been hit by a car
+	
+    public void updateState(){
+	if(!initialized)
+	    initialState();
+	else{
+	    int theLog = contactLog();
+	    if(theLog != -1)
+		userObject.position.x = userObject.position.x+logs[theLog].speed;
+	    for (int i = 0; i < numObstacles; i++){	
+		obstacles[i].update(this);
+		logs[i].update(this);
+	    }
+	    userObject.stillAlive(this);
+	}
+	if(userObject.position.y<=0)
+	    youWin=true;
+    }//updates the states of userObject,logs and obstacles.
+    
+    public void drawObstacles(Graphics g){
+	for(int i=0;i<numObstacles;i++){
+	    obstacles[i].draw(g,this);
+	}	
+    }
+    
+    public void drawLogs(Graphics g){
+	for (int i = 0; i < numLogs; i ++){
+	    logs[i].draw(g, this);
+	}
+    }
+    
+}
+
+class DrawImage extends JPanel{
+    static Image picture;
+    static Toolkit kit;
+    
+    public DrawImage(){
+	kit=Toolkit.getDefaultToolkit();
+	picture=null;
+    }
+    
+    public static void changePicture(String pictureName){
+	try{
+	    picture=ImageIO.read(new File(pictureName+".png"));
+	}
+	catch(Exception e){
+	    System.out.println("Fishsticks! "+e+"\t"+pictureName);
+	}
+    }
+}// to read image files 
